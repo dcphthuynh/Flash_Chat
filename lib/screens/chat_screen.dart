@@ -22,6 +22,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void getCurrentUser() async {
     final user = await _auth.currentUser;
+    print(user);
     try {
       if (user != null) {
         loggedInUser = user;
@@ -94,7 +95,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       onPressed: () {
                         messageTextController.clear();
                         _firestore.collection('messages').add({
-                          'sender': loggedInUser.email,
+                          'sender': loggedInUser.displayName != null
+                              ? loggedInUser.displayName
+                              : loggedInUser.email,
                           'text': textMessage,
                           'timestamp': FieldValue.serverTimestamp(),
                         });
@@ -143,8 +146,11 @@ class MessageStream extends StatelessWidget {
           // print(messageData);
           var messageText = messageData['text'];
           var messageSender = messageData['sender'];
+          // print(messageSender);
 
-          final currentUser = loggedInUser.email;
+          final currentUser = loggedInUser.displayName != null
+              ? loggedInUser.displayName
+              : loggedInUser.email;
 
           final messageBubble = MessageBubble(
             messageSender: messageSender,
