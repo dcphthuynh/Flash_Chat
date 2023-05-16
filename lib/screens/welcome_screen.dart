@@ -144,7 +144,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   try {
                     final newUser = await _auth.signInWithEmailAndPassword(
                         email: email, password: password);
-                    // print(newUser);
+                    print(newUser);
                     if (newUser != null) {
                       Navigator.pushNamed(context, ChatScreen.id);
                       setState(() {
@@ -222,8 +222,38 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 children: [
                   SquareTile(
                     imgPath: 'images/Google.svg.png',
-                    onTap: () {
-                      AuthService().signInWithGoogle();
+                    onTap: () async {
+                      try {
+                        UserCredential newUser =
+                            await AuthService().signInWithGoogle();
+                        print(newUser);
+                        if (newUser != null) {
+                          Navigator.pushNamed(context, ChatScreen.id);
+                          setState(() {
+                            showLoading = false;
+                          });
+                        }
+                      } on FirebaseAuthException catch (e) {
+                        setState(
+                          () {
+                            canSee = true;
+                            switch (e.code) {
+                              case 'invalid-email':
+                                warningText =
+                                    'Please re-enter a well formatted email';
+                                break;
+                              case 'wrong-password':
+                                warningText =
+                                    'Incorrect email or password. Please try again.';
+                                break;
+                              case 'user-not-found':
+                                warningText =
+                                    'Incorrect email or password. Please try again.';
+                                break;
+                            }
+                          },
+                        );
+                      }
                     },
                   ),
                   SizedBox(width: 25),
