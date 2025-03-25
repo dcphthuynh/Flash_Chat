@@ -1,65 +1,35 @@
+import 'package:flast_chat/blocs/auth/auth_state.dart';
 import 'package:flutter/material.dart';
 import '/constants.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flast_chat/components/message_bubble.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '/components/message_bubble.dart';
+import '../blocs/auth/auth_bloc.dart';
+import '../blocs/auth/auth_event.dart';
+import '../blocs/chat/chat_bloc.dart';
+import '../blocs/chat/chat_event.dart';
+import '../blocs/chat/chat_state.dart';
 
-final _firestore = FirebaseFirestore.instance;
-final _auth = FirebaseAuth.instance;
-User loggedInUser;
-
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends StatelessWidget {
   static const String id = 'chat_screen';
 
-  @override
-  _ChatScreenState createState() => _ChatScreenState();
-}
-
-class _ChatScreenState extends State<ChatScreen> {
   final messageTextController = TextEditingController();
-
-  String textMessage;
-
-  void getCurrentUser() async {
-    final user = await _auth.currentUser;
-    print(user);
-    try {
-      if (user != null) {
-        loggedInUser = user;
-        // print(loggedInUser);
-      }
-    } catch (e) {
-      print(e);
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    getCurrentUser();
-  }
-
-  void getMessagesStreams() async {
-    await for (var snapshot in _firestore.collection('messages').snapshots()) {
-      for (var message in snapshot.docs) {
-        // print(message.data);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
+    // Trigger loading messages when the screen builds
+    context.read<ChatBloc>().add(LoadMessagesEvent());
+
     return Scaffold(
       appBar: AppBar(
         leading: null,
         actions: <Widget>[
           IconButton(
-              icon: Icon(Icons.close),
-              onPressed: () {
-                //Implement logout functionality
-                _auth.signOut();
-                Navigator.pop(context);
-              }),
+            icon: Icon(Icons.close),
+            onPressed: () {
+              context.read<AuthBloc>().add(SignOutEvent());
+              Navigator.pop(context);
+            },
+          ),
         ],
         title: Text(
           'Chat Room',
@@ -72,9 +42,49 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            MessageStream(),
+            BlocBuilder<ChatBloc, ChatState>(
+              builder: (context, state) {
+                if (state is ChatLoading) {
+                  return Flexible(
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        backgroundColor: Colors.black,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                } else if (state is ChatLoaded) {
+                  final messages = state.messages.reversed.toList();
+                  return Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(color: Colors.grey[300]),
+                      child: ListView(
+                        reverse: true,
+                        padding:
+                            EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+                        children: messages.map((message) {
+                          final currentUser = context.read<AuthBloc>().state
+                                  is AuthSuccess
+                              ? (context.read<AuthBloc>().state as AuthSuccess)
+                                  .user
+                                  .email
+                              : '';
+                          return MessageBubble(
+                            messageSender: message['sender'],
+                            messageText: message['text'],
+                            isMe: currentUser == message['sender'],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  );
+                } else if (state is ChatError) {
+                  return Center(child: Text(state.error));
+                }
+                return Container();
+              },
+            ),
             Container(
-              // color: Colors.black,
               decoration: kMessageContainerDecoration,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -83,9 +93,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: TextField(
                       controller: messageTextController,
                       style: TextStyle(color: Colors.black),
-                      onChanged: (value) {
-                        textMessage = value;
-                      },
                       decoration: kMessageTextFieldDecoration,
                     ),
                   ),
@@ -93,20 +100,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: TextButton(
                       onPressed: () {
-                        messageTextController.clear();
-                        _firestore.collection('messages').add({
-                          'sender': loggedInUser.displayName != null
-                              ? loggedInUser.displayName
-                              : loggedInUser.email,
-                          'text': textMessage,
-                          'timestamp': FieldValue.serverTimestamp(),
-                        });
-                        getMessagesStreams();
+                        if (messageTextController.text.isNotEmpty) {
+                          context.read<ChatBloc>().add(
+                              SendMessageEvent(messageTextController.text));
+                          messageTextController.clear();
+                        }
                       },
-                      child: Text(
-                        'Send',
-                        style: kSendButtonTextStyle,
-                      ),
+                      child: Text('Send', style: kSendButtonTextStyle),
                     ),
                   ),
                 ],
@@ -115,61 +115,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class MessageStream extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('messages')
-          .orderBy('timestamp', descending: false)
-          .snapshots(),
-      builder: (context, snapshot) {
-        // print(snapshot.hasData);
-        if (!snapshot.hasData) {
-          return Flexible(
-            child: Center(
-              child: CircularProgressIndicator(
-                backgroundColor: Colors.black,
-                color: Colors.grey,
-              ),
-            ),
-          );
-        }
-        final messages = snapshot.data.docs.reversed;
-        List<MessageBubble> messageBubbles = [];
-        for (var message in messages) {
-          final messageData = message.data() as Map;
-          // print(messageData);
-          var messageText = messageData['text'];
-          var messageSender = messageData['sender'];
-          // print(messageSender);
-
-          final currentUser = loggedInUser.displayName != null
-              ? loggedInUser.displayName
-              : loggedInUser.email;
-
-          final messageBubble = MessageBubble(
-            messageSender: messageSender,
-            messageText: messageText,
-            isMe: currentUser == messageSender,
-          );
-          messageBubbles.add(messageBubble);
-        }
-        return Expanded(
-          child: Container(
-            decoration: BoxDecoration(color: Colors.grey[300]),
-            child: ListView(
-              reverse: true,
-              padding: EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-              children: messageBubbles,
-            ),
-          ),
-        );
-      },
     );
   }
 }
