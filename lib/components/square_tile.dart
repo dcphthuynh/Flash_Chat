@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class SquareTile extends StatelessWidget {
-  final String imgPath;
-  final Function onTap;
+  final imgPath;
+  final onTap;
 
   SquareTile({this.imgPath, this.onTap});
 

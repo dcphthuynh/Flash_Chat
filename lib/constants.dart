@@ -14,7 +14,7 @@ const kMessageTextFieldDecoration = InputDecoration(
 
 var kMessageContainerDecoration = BoxDecoration(
   border: Border(
-    top: BorderSide(color: Colors.grey[400], width: 2.0),
+    top: BorderSide(color: Colors.grey[400]!, width: 2.0),
   ),
 );
 
@@ -28,7 +28,7 @@ var kTextFieldDecoration = InputDecoration(
     borderSide: BorderSide(color: Colors.white),
   ),
   focusedBorder: OutlineInputBorder(
-    borderSide: BorderSide(color: Colors.grey[400]),
+    borderSide: BorderSide(color: Colors.grey[400]!),
   ),
   fillColor: Colors.white70,
   filled: true,
